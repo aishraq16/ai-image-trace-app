@@ -44,6 +44,9 @@ def format_web_detection(web_detection):
         "pages_with_matching_images": []
     }
 
+    for label in web_detection.best_guess_labels:
+        result["best_guess_labels"].append(label.label)
+
     for entity in web_detection.web_entities:
         result["web_entities"].append({
             "description": entity.description,
@@ -57,6 +60,8 @@ def format_web_detection(web_detection):
         result["partial_matching_images"].append({
             "url": image.url
         })
+    for image in web_detection.visually_similar_images:
+        result["visually_similar_images"].append(image.url)
     for page in web_detection.pages_with_matching_images:
         result["pages_with_matching_images"].append({
             "url": page.url,
@@ -66,20 +71,20 @@ def format_web_detection(web_detection):
 
 def build_prompt(web_detection_data):
     web_json = json.dumps(web_detection_data, indent=2)
-    prompt = f"""You are an image forensics analyst. You have been given an image and 
-    the results of a Google Cloud Vision web detection scan on that image.
+    prompt = f"""You are an image forensics analyst. You have only the results of a Google
+    Cloud Vision web detection scan. You do not have direct access to the image pixels,
+    so base your analysis strictly on this metadata.
 
     Here are the web detection results:
     {web_json}
 
-    Based on both the image itself and the web detection data, provide the following analysis:
+    Based only on the web detection metadata, provide the following analysis:
 
-    1. **Image Description**: Describe what you see in the image — the subject, setting, 
-    style (photo, illustration, meme, screenshot, etc.), and any notable details.
+    1. **Inferred Image Content**: Infer what the image is likely about using best-guess labels,
+    web entities, and matching context. Clearly keep this inference grounded in metadata.
 
-    2. **Identification**: What is this image of? Identify any people, places, objects, 
-    logos, artwork, or events shown. Be as specific as possible using both your visual 
-    analysis and the web entity data.
+    2. **Identification**: Identify likely people, places, objects, logos, artwork, or events
+    referenced by the metadata. Be as specific as possible.
 
     3. **Origin & Source**: Based on the matching pages and URLs, where did this image 
     likely originate? Is it a news photo, stock image, social media post, meme, 
@@ -93,8 +98,8 @@ def build_prompt(web_detection_data):
     should know about this image.
 
     If the web detection results are mostly empty, note that the image appears to have 
-    limited or no public internet presence and focus your analysis on what you can see 
-    in the image itself.
+    limited or no public internet presence and explain that confidence is limited because
+    only metadata is available.
 
     Also, keep responses to one paragraph. Dont hedge unnecessarily. """
     return prompt
@@ -111,4 +116,31 @@ model = GenerativeModel("gemini-1.5-flash-002")
 def generate_analysis(web_detection_data):
     prompt = build_prompt(web_detection_data)
     response = model.generate_content(prompt)
-    return response
+    candidates = getattr(response, "candidates", None)
+    if not candidates:
+        return "Analysis could not be generated."
+
+    if any(getattr(candidate, "blocked", False) for candidate in candidates):
+        return "Analysis could not be generated."
+
+    text = getattr(response, "text", None)
+    if not text:
+        return "Analysis could not be generated."
+
+    return text
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: python main.py <image_path>")
+        sys.exit(1)
+
+    image_path = sys.argv[1]
+    web_detection = detect_web(image_path)
+    formatted_web_detection = format_web_detection(web_detection)
+    analysis = generate_analysis(formatted_web_detection)
+    print(analysis)
+
+
+if __name__ == "__main__":
+    main()
