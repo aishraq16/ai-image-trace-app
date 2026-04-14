@@ -5,7 +5,7 @@ import vertexai
 from dotenv import load_dotenv
 from google.cloud import vision
 from vertexai.generative_models import GenerativeModel
-from vertexai.generative_models import Part
+
 
 '''
 PSEUDO CODE for detect_web function:
@@ -19,11 +19,14 @@ function detect_web(image_path):
 '''
 def detect_web(image_path):
     client = vision.ImageAnnotatorClient() #create a Vision client
-    
-    with open(image_path, 'rb') as image_file:
-        content = image_file.read() #read the image file as bytes
-    
-    image = vision.Image(content=content) #construct a Vision Image object from those bytes
+
+    if image_path.startswith(("http://", "https://")):
+        image = vision.Image(source=vision.ImageSource(image_uri=image_path))
+    else:
+        with open(image_path, 'rb') as image_file:
+            content = image_file.read() #read the image file as bytes
+
+        image = vision.Image(content=content) #construct a Vision Image object from those bytes
     
     response = client.web_detection(image=image) #call web_detection on the client, passing the image
     
@@ -52,17 +55,17 @@ def format_web_detection(web_detection):
             "description": entity.description,
             "score": entity.score
         })
-    for image in web_detection.full_matching_images:
+    for image in web_detection.full_matching_images[:10]:
         result["full_matching_images"].append({
             "url": image.url
         })
-    for image in web_detection.partial_matching_images:
+    for image in web_detection.partial_matching_images[:10]:
         result["partial_matching_images"].append({
             "url": image.url
         })
-    for image in web_detection.visually_similar_images:
+    for image in web_detection.visually_similar_images[:10]:
         result["visually_similar_images"].append(image.url)
-    for page in web_detection.pages_with_matching_images:
+    for page in web_detection.pages_with_matching_images[:10]:
         result["pages_with_matching_images"].append({
             "url": page.url,
             "title": page.page_title
@@ -101,7 +104,7 @@ def build_prompt(web_detection_data):
     limited or no public internet presence and explain that confidence is limited because
     only metadata is available.
 
-    Also, keep responses to one paragraph. Dont hedge unnecessarily. """
+    Dont hedge unnecessarily. """
     return prompt
 
 load_dotenv()
