@@ -109,7 +109,7 @@ PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT")
 LOCATION = os.getenv("LOCATION", "us-central1")
 
 vertexai.init(project=PROJECT_ID, location=LOCATION)
-model = GenerativeModel("gemini-1.5-flash-002")
+model = GenerativeModel("gemini-2.5-pro")
 
 
 
