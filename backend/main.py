@@ -71,22 +71,21 @@ def format_web_detection(web_detection):
 
 def build_prompt(web_detection_data):
     web_json = json.dumps(web_detection_data, indent=2)
-    prompt = f"""You are an image forensics analyst. You have only the results of a Google
-    Cloud Vision web detection scan. You do not have direct access to the image pixels,
-    so base your analysis strictly on this metadata.
+    prompt = f"""You are an image forensics analyst. You have both the image pixels and the results of a Google
+    Cloud Vision web detection scan. Use both the image and the metadata in your analysis.
 
     Here are the web detection results:
     {web_json}
 
-    Based only on the web detection metadata, provide the following analysis:
+    Based on both the image and the web detection metadata, provide the following analysis:
 
     1. **Inferred Image Content**: Infer what the image is likely about using best-guess labels,
-    web entities, and matching context. Clearly keep this inference grounded in metadata.
+    web entities, matching context, and the image itself. Clearly keep this inference grounded in both metadata and visual evidence.
 
     2. **Identification**: Identify likely people, places, objects, logos, artwork, or events
-    referenced by the metadata. Be as specific as possible.
+    referenced by the metadata or visible in the image. Be as specific as possible.
 
-    3. **Origin & Source**: Based on the matching pages and URLs, where did this image 
+    3. **Origin & Source**: Based on the matching pages, URLs, and the image content, where did this image 
     likely originate? Is it a news photo, stock image, social media post, meme, 
     promotional material, or something else?
 
@@ -97,11 +96,11 @@ def build_prompt(web_detection_data):
     5. **Key Takeaway**: In one or two sentences, give the most important thing someone 
     should know about this image.
 
-    If the web detection results are mostly empty, note that the image appears to have 
+    If the web detection results are mostly empty, or the image is unclear, note that the image appears to have 
     limited or no public internet presence and explain that confidence is limited because
-    only metadata is available.
+    only limited data is available.
 
-    Also, keep responses to one paragraph. Dont hedge unnecessarily. """
+    Also, keep responses to one paragraph. Don't hedge unnecessarily. """
     return prompt
 
 load_dotenv()
@@ -113,9 +112,15 @@ vertexai.init(project=PROJECT_ID, location=LOCATION)
 model = GenerativeModel("gemini-1.5-flash-002")
 
 
-def generate_analysis(web_detection_data):
+
+def generate_analysis(web_detection_data, image_path):
     prompt = build_prompt(web_detection_data)
-    response = model.generate_content(prompt)
+    # Read image bytes
+    with open(image_path, "rb") as f:
+        image_bytes = f.read()
+    image_part = Part.from_data(data=image_bytes, mime_type="image/jpeg")
+    # Send both prompt and image to the model
+    response = model.generate_content([prompt, image_part])
     candidates = getattr(response, "candidates", None)
     if not candidates:
         return "Analysis could not be generated."
@@ -138,7 +143,7 @@ def main():
     image_path = sys.argv[1]
     web_detection = detect_web(image_path)
     formatted_web_detection = format_web_detection(web_detection)
-    analysis = generate_analysis(formatted_web_detection)
+    analysis = generate_analysis(formatted_web_detection, image_path)
     print(analysis)
 
 
