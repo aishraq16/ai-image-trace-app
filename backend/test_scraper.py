@@ -2,7 +2,8 @@ import sys
 from scraper import process_url
 
 def test_scraper():
-    test_urls = [ "https://www.bbc.com/news/articles/c62l429w2pko"
+    test_urls = [ 
+                 "https://www.independent.ie/irish-news/israels-irish-embassy-condemned-over-european-terror-propaganda-tweets/30464051.html"
         # Add your test URLs here
         # Example:
         # "https://www.bbc.com/news/world-us-canada-12345678",

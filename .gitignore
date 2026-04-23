@@ -1,0 +1,5 @@
+backend/.env
+*.json
+venv/
+__pycache__/
+backend/test_images/

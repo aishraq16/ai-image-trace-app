@@ -1,4 +1,61 @@
+def analyze_image_context(image_url: str, claimed_context: str, vision_web_detection_results: dict) -> dict:
+    """
+    Analyze whether the image is being used out of context compared to its verified web history.
+    Returns a dictionary with keys: verdict, confidence, explanation, discrepancies.
+    """
+    # For this wrapper, we will use the claimed_context and vision_web_detection_results to build a prompt,
+    # and pass the image_url as the image to the model (download image bytes).
+    import requests
+    from vertexai.generative_models import Part
+    # Download image bytes
+    try:
+        resp = requests.get(image_url, timeout=15)
+        resp.raise_for_status()
+        image_bytes = resp.content
+    except Exception as e:
+        return {
+            "verdict": "error",
+            "confidence": 0.0,
+            "explanation": f"Failed to download image: {e}",
+            "discrepancies": [str(e)]
+        }
+    # Build prompt
+    context_json = json.dumps(vision_web_detection_results, indent=2)
+    prompt = f"""You are an image forensics analyst. Here is the context in which an image is being used (the 'claimed context'):\n\n{claimed_context}\n\nHere is the verified web context for this image (from Google Cloud Vision):\n\n{context_json}\n\nBased on both the image and the context, answer the following:\n\n1. Is the image being used in a way that matches its verified web history, or is it out of context?\n2. Give a confidence score (1 to 10).\n3. Explain your reasoning.\n4. List any specific discrepancies between the claimed context and the verified context.\n\nRespond in JSON with keys: verdict (match/mismatch), confidence (int), explanation (str), discrepancies (list of str)."""
+    image_part = Part.from_data(data=image_bytes, mime_type="image/jpeg")
+    response = model.generate_content([prompt, image_part])
+    text = getattr(response, "text", None)
+    if not text:
+        return {
+            "verdict": "error",
+            "confidence": 0.0,
+            "explanation": "No response from Gemini model.",
+            "discrepancies": ["No output"]
+        }
+    # Try to parse JSON from model output
+    try:
+        import json as _json
+        # Sometimes model output is not pure JSON, so extract JSON block
+        match = re.search(r'\{.*\}', text, re.DOTALL)
+        if match:
+            parsed = _json.loads(match.group(0))
+        else:
+            parsed = _json.loads(text)
+        # Ensure required keys
+        for key in ["verdict", "confidence", "explanation", "discrepancies"]:
+            if key not in parsed:
+                parsed[key] = None
+        return parsed
+    except Exception as e:
+        return {
+            "verdict": "error",
+            "confidence": 0.0,
+            "explanation": f"Failed to parse model output: {e}\nRaw output: {text}",
+            "discrepancies": [str(e)]
+        }
+    
 import os
+import re
 import json
 import sys
 import vertexai
