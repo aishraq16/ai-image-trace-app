@@ -131,7 +131,6 @@ def generate_analysis(web_detection_data, image_path):
     text = getattr(response, "text", None)
     if not text:
         return "Analysis could not be generated."
-
     return text
 
 
